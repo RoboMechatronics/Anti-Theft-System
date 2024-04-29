@@ -153,7 +153,7 @@ void RUN_SYSTEM(CONTACTS phone_number) {
           delay(300);  //Wait for minute
           //###################################################################################
           //The second person
-          /*if (test == true) {
+          if (test == true) {
             Serial.println("Calling...Person 2");
             CALL_NUMBER(phone_number.HIEN);
 
@@ -171,7 +171,7 @@ void RUN_SYSTEM(CONTACTS phone_number) {
           STOP_CALL();
           //End of The second person
           //###################################################################################
-          delay(300);*/
+          delay(300);
           //###################################################################################
           //The third person
           if (test == true) {
