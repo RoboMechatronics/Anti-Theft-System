@@ -10,31 +10,28 @@
 unsigned int distance = 0;
 const uint8_t TRIG_PIN = 4;                      // TRIG pin on sensor connect to pin 4 of arduino
 const uint8_t ECHO_PIN = 5;                      // ECO pin on sensor connect to pin 5 of arduino
-const uint8_t RXD = 2;                           // TXD pin on SIM900A module connect to pin 2 of arduino (it's declared as RXD pin of arduino)
-const uint8_t TXD = 3;                           // RXD pin on SIM900A module connect to pin 3 of arduino (it's declared as TXD pin of arduino)
-const unsigned int light = 13;                   // For test only
+const uint8_t RXD = 8;                           // TXD pin on SIM900A module connect to pin 2 of arduino (it's declared as RXD pin of arduino)
+const uint8_t TXD = 9;                           // RXD pin on SIM900A module connect to pin 3 of arduino (it's declared as TXD pin of arduino)
+const unsigned int light = 13;                   // For TEST only
 const uint8_t delay_in_second = 20;              // Delay time ofter call
 const unsigned int sampling_time_in_ms = 500;    // Sampling time
 unsigned int alarm_range[2] = { 0, 40 };         // limit distance in cm
 const unsigned int RESET_TIME_IN_SECOND = 3600;  // RESET BOARD TIME, reset after 1 hour.
-unsigned int set_distance = alarm_range[1];
-const unsigned int max_distance = 300;  //Only use distance up to 300 cm
-
+const unsigned int MAX_DISTANCE = 200;  //Only use distance up to 300 cm
+unsigned int A7_value = 0;
+int analogPin = A7;
 //Options
-bool test = false;  // For test only if test = true, else test = false
-char call = 'c';   // m: message, c: call, n: nothing
+const bool TEST = false;  // For TEST only if TEST = true, else TEST = false
 
 // Declare CONTACTS data type
-struct CONTACTS {
+struct CONTACTS 
+{
   char HIEN[13];     // 1
-  char BE_NGHI[13];  // 2
-  char BE_AN[13];    // 3
-  char ME_VO[13];    // 4
-  char BA_VO[13];    // 5
+  char CAU_HIEN[13];  // 2
 };
 
-//Contacts                      1               2               3               4                5
-CONTACTS PHONE_NUMBER = { "+84398554576", "+84962085110", "+84338366638", "+84397899809", "+84332899333" };
+//Contacts
+CONTACTS PHONE_NUMBER = { "+84398554576", "+84975568882"};
 
 //BAUD RATE
 const unsigned int BAUD_RATE = 9600;
@@ -45,44 +42,43 @@ SoftwareSerial SIM900A(RXD, TXD);
 unsigned long time = millis();
 
 // Set up
-void setup() {
+void setup() 
+{
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
   pinMode(light, OUTPUT);
-
+  
   SIM900A.begin(BAUD_RATE);
-  //SIM900A.println("ATE0");
 
-  if (test == true) {
+  if (TEST == true) {
     Serial.begin(BAUD_RATE);
     delay(100);
     Serial.print("\nInitial DISTANCE variable: ");
     Serial.println(distance);
     Serial.println("Start....");
   }
-
   digitalWrite(light, 0);
 }
 
 // Main function
-void loop() {
-
-  unsigned int value = analogRead(A0);
-
-  set_distance = map(value, 0, 1023, 0, max_distance);
-  if (set_distance >= 198) set_distance = max_distance;
-  alarm_range[1] = set_distance;
-
+void loop() 
+{
+  //Set distance
+  A7_value = analogRead(analogPin);
+  alarm_range[1] = map(A7_value, 0, 1023, 0, MAX_DISTANCE);
+  if(1010 < A7_value & A7_value <= 1023) alarm_range[1] = MAX_DISTANCE;
+  
   // Run system
   RUN_SYSTEM(PHONE_NUMBER);
+
   // Sampling time in ms
   delay(sampling_time_in_ms);
 
   // Calculate time to reset board
   unsigned long dt = (millis() - time) / 1000;
-  if (dt == RESET_TIME_IN_SECOND) {  //second unit
-    if (test == true) {              // Only print when test
-      Serial.print("\nTotal run time [s]: ");
+  if (dt >= RESET_TIME_IN_SECOND) {  //second unit
+    if (TEST == true) {              // Only print when TEST
+      Serial.print("\nRESET BOARD,   Total run time [s]: ");
       Serial.println(dt);
       delay(100);
     }
@@ -92,147 +88,54 @@ void loop() {
 
 //----------------------------------------------------------------------------------------------------------
 // Sub functions
-void RUN_SYSTEM(CONTACTS phone_number) {
+void RUN_SYSTEM(CONTACTS phone_number) 
+{
+  // Turn off light
+  if(TEST == true) digitalWrite(light, 0);
 
   // Calculate distance
   CALCULATE_DISTANCE(distance);
 
-  if (test == true) {  // Only print when test
-    Serial.print("\nDistance: ");
-    Serial.print(distance);  // For test only
-    Serial.print(" cm ");    // For test only
+  if (TEST == true) 
+  {  // Only print when TEST
+    Serial.print("\nd ");
+    Serial.print(distance);  
+    Serial.print(" cm ");
   }
 
-  // Check distance
-  if (distance >= alarm_range[0] and distance <= alarm_range[1]) {  // distance unit: [cm]
-    if (test == true) {
-      Serial.println("...Please wait for 1s to check again!");  // Only print when test
-    }
-    delay(1000);  //wait 1s to check again
-
-    // Calculate distance again
+  // Check again after 2s
+  if (distance >= alarm_range[0] && distance <= alarm_range[1]) // distance unit: [cm]
+  { 
+    // Delay 500ms then check again to avoid value noise
+    delay(500);
+    // re-calculate distance
     CALCULATE_DISTANCE(distance);
 
-    if (test == true) {  // Only print when test
-      Serial.print("Distance: ");
-      Serial.print(distance);
-      Serial.print(" cm. ");
-    }
-
-    // Check again after 2s
-    if (distance >= alarm_range[0] and distance <= alarm_range[1]) {  // distance unit: [cm]
-      if (test == true) {                                             // Only print when test
-        Serial.print("In range 0 - ");
+    if (distance >= alarm_range[0] && distance <= alarm_range[1]){ 
+      if (TEST == true) 
+      {                                             // Only print when TEST
+        Serial.print(". In range 0 - ");
         Serial.print(alarm_range[1]);
-        Serial.print("cm. ");
-        Serial.println("********Warning!!!********");  //Detect stranger
+        Serial.println("cm. ");
+        Serial.println("******** a stranger ********");  //Detect stranger
+        digitalWrite(light, 1);
       }
-      // digitalWrite(light, 1);
-      switch (call) {  //there are two options to alert.
-        case 'c':      //option 1, perform a call.
-          //###################################################################################
-          //The first person
-          if (test == true) {
-            Serial.println("Calling...Person 1");
-            CALL_NUMBER(phone_number.HIEN);  //PLease change to BE_AN if run
-
-            Serial.print("Please wait for ");
-            Serial.print(delay_in_second);
-            Serial.println("s to stop call.");
-          } else {  // if test == false and don't print anything
-            CALL_NUMBER(phone_number.BE_AN);
-          }
-
-          delay_func(delay_in_second);
-
-          if (test == true) Serial.println("Stop call.");  // Only print when test
-
-          STOP_CALL();
-          //End of The first person
-          //###################################################################################
-          delay(300);  //Wait for minute
-          //###################################################################################
-          //The second person
-          if (test == true) {
-            Serial.println("Calling...Person 2");
-            CALL_NUMBER(phone_number.HIEN);
-
-            Serial.print("Please wait for ");
-            Serial.print(delay_in_second);
-            Serial.println("s to stop call.");
-          } else {  // if test == false and don't print anything
-            CALL_NUMBER(phone_number.ME_VO);
-          }
-
-          delay_func(delay_in_second);
-
-          if (test == true) Serial.println("Stop call.");  // Only print when test
-
-          STOP_CALL();
-          //End of The second person
-          //###################################################################################
-          delay(300);
-          //###################################################################################
-          //The third person
-          if (test == true) {
-            Serial.println("Calling...Person 3");
-            CALL_NUMBER(phone_number.HIEN);
-
-            Serial.print("Please wait for ");
-            Serial.print(delay_in_second);
-            Serial.println("s to stop call.");
-          } else {  // if test == false and don't print anything
-            CALL_NUMBER(phone_number.HIEN);
-          }
-
-          delay_func(delay_in_second);
-
-          if (test == true) Serial.println("Stop call.");  // Only print when test
-
-          STOP_CALL();
-          //End of The third person
-          //###################################################################################
-          break;  // No use break in this case
-        // End of case 'c'
-        //#####################################################################################
-        case 'm':                                             //option m, send a message.
-          if (test == true) Serial.println("Send message.");  // Only print when test
-
-          if (test == false) {
-            SEND_MESSAGE(phone_number.HIEN, distance);
-          }
-
-          delay(100);
-
-          break;
-        // End of case 'm'
-        //######################################################################################
-        case 'n':  //option 2, Nothing
-          if (test == true) {
-            Serial.println("##########################################################################");
-            Serial.println("     ...........................Nothing!.............................     ");
-            Serial.println("        .......................................................           ");
-            Serial.println("        .......................TEST ONLY.......................           ");
-            Serial.println("        .......................................................           ");
-            Serial.println("     ..........................GOODBYE!!!............................     ");
-            Serial.println("##########################################################################");
-          }
-          break;
-      }
+      CALL_PERSON(PHONE_NUMBER, TEST);
     }
-  } else {
-    if (test == true) {
-      Serial.print("> ");
+  }
+  else 
+  {
+    if (TEST == true) 
+    {
+      Serial.print("> max ");
       Serial.print(alarm_range[1]);
-      Serial.print("cm. ");
-      Serial.print("Phone: ");
+      Serial.print(" cm. ");
+      Serial.print("Using: ");
       Serial.print(phone_number.HIEN);
     }
   }
-
-  // digitalWrite(light, 0);
 }
-// End of void RUN_SYSTEM(char* phone_number)
+// End of void RUN_SYSTEM()
 
 void CALCULATE_DISTANCE(unsigned int& d) {
   digitalWrite(TRIG_PIN, LOW);
@@ -245,6 +148,35 @@ void CALCULATE_DISTANCE(unsigned int& d) {
   d = duration / 29 / 2;  //data range from 0 to 65535
 }
 
+void CALL_PERSON(CONTACTS phone_number, bool TEST)
+{
+  //The third person
+      if (TEST==true) 
+      {
+        Serial.print("Call ");
+        Serial.println(phone_number.HIEN);
+
+        CALL_NUMBER(phone_number.HIEN);
+
+        Serial.print("Automatically stop calls after ");
+        Serial.print(delay_in_second);
+        Serial.println("s.");
+
+        delay_func(delay_in_second);
+        
+        Serial.println("Stop call.");
+        STOP_CALL();
+        delay(100);
+      } 
+      else 
+      {  // if TEST == false and don't print anything
+        CALL_NUMBER(phone_number.CAU_HIEN);
+        delay_func(delay_in_second);
+        STOP_CALL();
+        delay(100);
+      }
+   
+}
 void CALL_NUMBER(const char* phone_number) {
   SIM900A.print("ATD");
   SIM900A.print(phone_number);
@@ -258,13 +190,15 @@ void STOP_CALL() {
 
 void SEND_MESSAGE(const char* phone_number, unsigned int dist) {
   // Active SMS mode
-  if (test == true) Serial.println("Active SMS mode");
+  if (TEST == true) {
+    Serial.println("Active SMS mode");
+  }
 
   SIM900A.println("AT+CMGF=1");
   delay(500);
 
   // Set up phone number to send
-  if (test == true) {  // Only print when test
+  if (TEST == true) {  // Only print when TEST
     Serial.print("Number to send: ");
     Serial.println(phone_number);
   }
@@ -280,7 +214,7 @@ void SEND_MESSAGE(const char* phone_number, unsigned int dist) {
   SIM900A.print("cm. Canh bao! CO TROM, vui long kiem tra.");  // The SMS text you want to send
   delay(100);
 
-  if (test == true) Serial.print("The message has been sent. ");
+  if (TEST == true) Serial.print("The message has been sent. ");
 
   // Completed
   SIM900A.println((char)26);  // ASCII code of CTRL+Z for saying the end of sms to  the module
@@ -297,11 +231,14 @@ void delay_func(unsigned int delay_in_second) {
 }
 
 void ResetBoard() {
-  if (test == true) {  // Only print when test
+  if (TEST == true) {  // Only print when TEST
+    Serial.println("        #######################################################       ");
     Serial.println("###########################  Reset Board  ############################");
+    Serial.println("        #######################################################       ");
     delay(100);
   }
   asm volatile("jmp 0");
 }
+
 
 // End of program
